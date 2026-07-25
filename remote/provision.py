@@ -33,6 +33,21 @@ def create_pod() -> str:
     with open(SSH_PUBKEY_PATH) as f:
         pubkey = f.read().strip()
 
+    # Deploying via a raw imageName (not a RunPod "template" object) skips
+    # whatever startup wrapper their own templates use to auto-configure
+    # sshd — confirmed by hand: the vanilla runpod/pytorch image never opened
+    # port 22 without this. Explicit start command from RunPod's own "custom
+    # template" SSH docs, adapted to write the key inline instead of reading
+    # $PUBLIC_KEY (which is only auto-populated by their template wrapper).
+    start_cmd = (
+        "bash -c '"
+        "apt update && DEBIAN_FRONTEND=noninteractive apt-get install -y openssh-server; "
+        "mkdir -p ~/.ssh && chmod 700 ~/.ssh; "
+        f"echo \\\"{pubkey}\\\" >> ~/.ssh/authorized_keys && chmod 600 ~/.ssh/authorized_keys; "
+        "service ssh start; "
+        "sleep infinity'"
+    )
+
     query = f"""
     mutation {{
       podFindAndDeployOnDemand(input: {{
@@ -45,9 +60,9 @@ def create_pod() -> str:
         gpuTypeId: "{GPU_TYPE_ID}"
         name: "rivaquant-train"
         imageName: "{IMAGE}"
+        dockerArgs: "{start_cmd}"
         ports: "22/tcp"
         volumeMountPath: "/workspace"
-        env: [{{ key: "SSH_PUBLIC_KEY", value: "{pubkey}" }}]
       }}) {{ id }}
     }}
     """
