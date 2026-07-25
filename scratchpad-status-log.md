@@ -1,0 +1,9 @@
+2026-07-25T08:05:22Z step=4050/20000 train_loss=2.0915 val_loss=2.1655 elapsed_cost=$0.19
+2026-07-25T08:26:58Z step=6000/20000 train_loss=1.8703 val_loss=2.0029 elapsed_cost=$0.27
+2026-07-25T08:48:56Z step=8000/20000 train_loss=1.8992 val_loss=1.8677 elapsed_cost=$0.35
+2026-07-25T09:10:57Z step=10050/20000 train_loss=1.8815 val_loss=1.8404(best) elapsed_cost=$0.43
+2026-07-25T09:32:54Z step=12050/20000 train_loss=1.7689 best_val_loss=1.7983 elapsed_cost=$0.51
+2026-07-25T09:54:56Z step=14050/20000 train_loss=1.7244 best_val_loss=1.7163 elapsed_cost=$0.59
+2026-07-25T10:16:57Z step=16100/20000 train_loss=1.6884 best_val_loss=1.7101 elapsed_cost=$0.67
+2026-07-25T10:38:57Z step=18150/20000 train_loss=1.6104 best_val_loss=1.6007 elapsed_cost=$0.76
+2026-07-25T10:56:05Z step=19750/20000 train_loss=1.7135 best_val_loss=1.6007 elapsed_cost=$0.82
