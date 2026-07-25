@@ -18,8 +18,15 @@ OUT_DIR = os.environ.get("RIVAQUANT_OUT", "/workspace/rivaquant-out")
 STATUS_PATH = os.path.join(OUT_DIR, "status.json")
 LOG_PATH = os.path.join(OUT_DIR, "train.log")
 
-BLOCK_SIZE = int(os.environ.get("RIVAQUANT_BLOCK_SIZE", "512"))
-BATCH_SIZE = int(os.environ.get("RIVAQUANT_BATCH_SIZE", "32"))
+BLOCK_SIZE = int(os.environ.get("RIVAQUANT_BLOCK_SIZE", "256"))
+# BitLinear's STE (activation_quant(x) kept alongside x for the backward
+# graph, per BitLinear call, x4 per block x n_layer) uses far more peak
+# memory per sample than a plain nn.Linear block at the same size — a batch
+# of 32 at block_size=512 OOM'd a 24GB card. Small micro-batch + gradient
+# accumulation keeps the same effective batch size at a fraction of the
+# peak memory.
+BATCH_SIZE = int(os.environ.get("RIVAQUANT_BATCH_SIZE", "8"))
+GRAD_ACCUM_STEPS = int(os.environ.get("RIVAQUANT_GRAD_ACCUM_STEPS", "4"))
 MAX_STEPS = int(os.environ.get("RIVAQUANT_MAX_STEPS", "20000"))
 EVAL_INTERVAL = int(os.environ.get("RIVAQUANT_EVAL_INTERVAL", "250"))
 LR = float(os.environ.get("RIVAQUANT_LR", "3e-4"))
@@ -84,17 +91,20 @@ def main() -> None:
         for g in opt.param_groups:
             g["lr"] = lr_at(step)
 
-        x, y = get_batch("train", cfg)
-        _, loss = model(x, y)
         opt.zero_grad(set_to_none=True)
-        loss.backward()
+        train_loss = 0.0
+        for _ in range(GRAD_ACCUM_STEPS):
+            x, y = get_batch("train", cfg)
+            _, loss = model(x, y)
+            (loss / GRAD_ACCUM_STEPS).backward()
+            train_loss += loss.item() / GRAD_ACCUM_STEPS
         torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0)
         opt.step()
 
         if step % 50 == 0:
-            log(f"step {step}/{MAX_STEPS}  train_loss {loss.item():.4f}  lr {lr_at(step):.2e}")
+            log(f"step {step}/{MAX_STEPS}  train_loss {train_loss:.4f}  lr {lr_at(step):.2e}")
             write_status(stage="training", step=step, max_steps=MAX_STEPS,
-                          train_loss=loss.item(), best_val_loss=best_val)
+                          train_loss=train_loss, best_val_loss=best_val)
 
         if step > 0 and step % EVAL_INTERVAL == 0:
             val_loss = estimate_val_loss(model, cfg)
@@ -104,7 +114,7 @@ def main() -> None:
                 torch.save({"model": model.state_dict(), "cfg": cfg, "step": step},
                            os.path.join(OUT_DIR, "best.pt"))
             write_status(stage="training", step=step, max_steps=MAX_STEPS,
-                          train_loss=loss.item(), val_loss=val_loss, best_val_loss=best_val)
+                          train_loss=train_loss, val_loss=val_loss, best_val_loss=best_val)
 
     torch.save({"model": model.state_dict(), "cfg": cfg, "step": MAX_STEPS},
                os.path.join(OUT_DIR, "final.pt"))
