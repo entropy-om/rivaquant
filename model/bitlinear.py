@@ -28,12 +28,26 @@ def weight_quant(w: Tensor) -> Tensor:
     return u
 
 
+class RMSNorm(nn.Module):
+    """torch.nn.RMSNorm needs torch>=2.4; the RunPod training image ships
+    2.1.0. Same math, no version dependency: x / rms(x) * weight."""
+
+    def __init__(self, dim: int, eps: float = 1e-6):
+        super().__init__()
+        self.eps = eps
+        self.weight = nn.Parameter(torch.ones(dim))
+
+    def forward(self, x: Tensor) -> Tensor:
+        rms = x.pow(2).mean(dim=-1, keepdim=True).add(self.eps).sqrt()
+        return x / rms * self.weight
+
+
 class BitLinear(nn.Linear):
     """Drop-in replacement for nn.Linear with BitNet b1.58 ternary weights."""
 
     def __init__(self, in_features: int, out_features: int, bias: bool = False):
         super().__init__(in_features, out_features, bias=bias)
-        self.norm = nn.RMSNorm(in_features)
+        self.norm = RMSNorm(in_features)
 
     def forward(self, x: Tensor) -> Tensor:
         w = self.weight

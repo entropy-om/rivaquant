@@ -12,7 +12,7 @@ import torch
 import torch.nn.functional as F
 from torch import nn
 
-from .bitlinear import BitLinear
+from .bitlinear import BitLinear, RMSNorm
 
 
 @dataclass
@@ -87,9 +87,9 @@ class MLP(nn.Module):
 class Block(nn.Module):
     def __init__(self, cfg: RivaQuantConfig):
         super().__init__()
-        self.ln1 = nn.RMSNorm(cfg.n_embd)
+        self.ln1 = RMSNorm(cfg.n_embd)
         self.attn = CausalSelfAttention(cfg)
-        self.ln2 = nn.RMSNorm(cfg.n_embd)
+        self.ln2 = RMSNorm(cfg.n_embd)
         self.mlp = MLP(cfg)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
@@ -104,7 +104,7 @@ class RivaQuant(nn.Module):
         self.cfg = cfg
         self.tok_emb = nn.Embedding(cfg.vocab_size, cfg.n_embd)  # full precision: a lookup table
         self.blocks = nn.ModuleList(Block(cfg) for _ in range(cfg.n_layer))
-        self.ln_f = nn.RMSNorm(cfg.n_embd)
+        self.ln_f = RMSNorm(cfg.n_embd)
         self.head = BitLinear(cfg.n_embd, cfg.vocab_size)
         self.apply(self._init_weights)
 
